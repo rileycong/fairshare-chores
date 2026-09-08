@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Help</h1>
+
+<section>
+    <h2>Getting started</h2>
+    <p><strong>Create a household</strong> on the welcome screen with your name, a 4–8 digit PIN, and your WhatsApp number. You'll get a <strong>join code</strong> to share.</p>
+    <p><strong>Roommates join</strong> by entering that code with their own name, PIN, and WhatsApp number. A household holds 2–4 roommates. Your device remembers you — no passwords anywhere.</p>
+</section>
+
+<section>
+    <h2>How assignment works</h2>
+    <p>Assignment is <strong>automatic</strong> — there is no manual reassignment. Every new chore occurrence goes to the roommate with the <strong>fewest completed effort points</strong>. If two roommates are tied, the tie rotates so everyone gets a fair turn.</p>
+    <p>Effort points are fixed per chore size: <strong>small = 1</strong>, <strong>medium = 2</strong>, <strong>large = 3</strong>. The next occurrence is always scheduled from the original due date — completing late never shifts the rota.</p>
+</section>
+
+<section>
+    <h2>Marking a chore done</h2>
+    <p>On the Chores screen, your own chores show a <strong>Mark done</strong> button. Completing a chore adds its points to your total, writes a permanent history entry, restocks any linked supply, and schedules the next occurrence. Only the current assignee can complete a chore.</p>
+    <p>Chores past their due date show as <strong>Overdue</strong> and stay visible until the assignee completes them.</p>
+</section>
+
+<section>
+    <h2>Swapping a chore</h2>
+    <p>On your chore card, pick a roommate in the dropdown and press <strong>Request swap</strong>. The chore shows as "Swap requested" until they respond.</p>
+    <p>The chosen roommate sees the request in <strong>Swap requests for you</strong> at the top of their Chores screen and can <strong>Accept</strong> or <strong>Decline</strong>. Accepting moves the chore to them — nobody else can approve it, and there is no other way to reassign.</p>
+</section>
+
+<section>
+    <h2>Supplies</h2>
+    <p>The <strong>Supplies</strong> screen lists household items and their restock status. Anyone can toggle an item between restocked and not-restocked. Link a supply to a chore in the chore editor — completing that chore (e.g. "Buy toilet paper") automatically marks the supply restocked.</p>
+</section>
+
+<section>
+    <h2>History</h2>
+    <p>The <strong>History</strong> screen shows every completed chore in the household, newest first, with who did it, the points earned, and whether the assignment was swapped.</p>
+</section>
+
+<section>
+    <h2>Reminders</h2>
+    <p>Each chore has its own reminder time. When it arrives, the assignee gets a <strong>WhatsApp message</strong> and a <strong>web push notification</strong>.</p>
+    <p>Enable web push on the <strong>Settings</strong> screen. On WhatsApp, reply <strong>done</strong> to the bot to complete your earliest due chore — the bot only accepts replies from the assigned roommate's number.</p>
+    <p>Settings is also where you change your display name, PIN, or WhatsApp number, and where you can find the household join code again.</p>
+</section>
+
+<section>
+    <h2>AI assistant</h2>
+    <p>The <strong>Ask the assistant</strong> box on the Chores screen can explain why an assignment is fair, suggest who is next, draft a new chore ("add vacuuming every two weeks"), or draft a swap ("swap my chore with Ben").</p>
+    <p>Anything that changes data always shows a <strong>confirmation page</strong> first — nothing is saved until you confirm, and cancelling saves nothing. Swap drafts still need the target roommate's approval.</p>
+</section>
+
+<p><a href="{% url 'chore_list' %}">Back to chores</a></p>
+{% endblock %}

@@ -328,6 +328,10 @@ def push_subscribe(request):
     return JsonResponse({"ok": True})
 
 
+def help_page(request):
+    return render(request, "help.html")
+
+
 def settings_view(request):
     roommate = get_roommate(request)
     if roommate is None:
