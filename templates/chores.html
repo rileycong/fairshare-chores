@@ -2,14 +2,22 @@
 
 {% block content %}
 <h1>Chores</h1>
-<p>Welcome, {{ roommate.display_name }}.</p>
-{% if chores %}
-<ul>
-    {% for chore in chores %}
-    <li>{{ chore.name }}</li>
-    {% endfor %}
-</ul>
-{% else %}
+<p><a href="{% url 'chore_list' %}">Refresh</a></p>
+
+{% for css, label, group_chores in groups %}
+    {% if group_chores %}
+    <section class="chore-group group-{{ css }}">
+        <h2>{{ label }}</h2>
+        {% for chore in group_chores %}
+            {% with display_status=css %}
+                {% include "chore_card.html" %}
+            {% endwith %}
+        {% endfor %}
+    </section>
+    {% endif %}
+{% endfor %}
+
+{% if not has_chores %}
 <p>No chores yet.</p>
 {% endif %}
 {% endblock %}

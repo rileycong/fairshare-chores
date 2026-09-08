@@ -64,3 +64,39 @@ button {
 a {
     color: #2563eb;
 }
+
+.chore-card {
+    background: #fff;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.chore-card header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: #e5e7eb;
+}
+
+.status-overdue .badge {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.status-swap_requested .badge {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.chore-card form button {
+    margin-bottom: 0;
+}

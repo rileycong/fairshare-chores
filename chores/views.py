@@ -1,10 +1,13 @@
 import secrets
 import string
 
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpResponseForbidden
+from django.utils import timezone
 
 from .forms import CreateHouseholdForm, JoinHouseholdForm
-from .models import Household, Roommate
+from .models import Chore, Household, Roommate
+from .services import CompletionError, complete_chore as complete_chore_service
 
 SESSION_KEY = "roommate_id"
 MAX_ROOMMATES = 4
@@ -126,4 +129,46 @@ def chore_list(request):
     roommate = get_roommate(request)
     if roommate is None:
         return redirect("home")
-    return render(request, "chores.html", {"roommate": roommate, "chores": []})
+
+    chores = list(
+        roommate.household.chores.select_related("assignee").order_by("due_at")
+    )
+    now = timezone.now()
+    grouped = {"overdue": [], "swap_requested": [], "assigned": []}
+    for chore in chores:
+        if chore.status == Chore.Status.SWAP_REQUESTED:
+            grouped["swap_requested"].append(chore)
+        elif chore.due_at < now:
+            grouped["overdue"].append(chore)
+        else:
+            grouped["assigned"].append(chore)
+
+    return render(
+        request,
+        "chores.html",
+        {
+            "roommate": roommate,
+            "has_chores": bool(chores),
+            "groups": [
+                ("overdue", "Overdue", grouped["overdue"]),
+                ("swap_requested", "Swap requested", grouped["swap_requested"]),
+                ("assigned", "Assigned", grouped["assigned"]),
+            ],
+        },
+    )
+
+
+def complete_chore_view(request, chore_id):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return redirect("home")
+    chore = get_object_or_404(Chore, id=chore_id, household=roommate.household)
+    if request.method != "POST":
+        return redirect("chore_list")
+    try:
+        complete_chore_service(chore, roommate)
+    except CompletionError:
+        return HttpResponseForbidden(
+            "Only the current assignee can complete this chore."
+        )
+    return redirect("chore_list")

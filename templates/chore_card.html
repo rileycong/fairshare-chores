@@ -1,0 +1,17 @@
+<article class="chore-card status-{{ display_status }}">
+    <header>
+        <strong>{{ chore.name }}</strong>
+        <span class="badge">{{ display_status }}</span>
+    </header>
+    <p>
+        Assigned to {{ chore.assignee.display_name|default:"nobody" }}
+        &middot; due {{ chore.due_at|date:"M j, H:i" }}
+    </p>
+    {% if chore.notes %}<p class="notes">{{ chore.notes }}</p>{% endif %}
+    {% if chore.assignee == roommate %}
+    <form method="post" action="{% url 'complete_chore' chore.id %}">
+        {% csrf_token %}
+        <button type="submit">Mark done</button>
+    </form>
+    {% endif %}
+</article>
