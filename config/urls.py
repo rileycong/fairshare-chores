@@ -28,6 +28,8 @@ urlpatterns = [
     path('service-worker.js', views.service_worker, name='service_worker'),
     path('offline/', views.offline, name='offline'),
     path('webhooks/whatsapp/', webhooks.whatsapp_webhook, name='whatsapp_webhook'),
+    path('ai/prompt/', views.ai_prompt, name='ai_prompt'),
+    path('ai/confirm/', views.ai_confirm, name='ai_confirm'),
 ]
 
 if settings.DEBUG:

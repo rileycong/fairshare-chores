@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import json
 import os
@@ -6,6 +6,7 @@ import secrets
 import string
 
 from django.contrib.staticfiles import finders
+from django.contrib import messages
 from django.core.paginator import Paginator
 from django.http import (
     FileResponse,
@@ -18,6 +19,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from .ai import _normalize_chore_payload, handle_prompt
 from .forms import (
     ChoreForm,
     CreateHouseholdForm,
@@ -353,6 +355,104 @@ def settings_view(request):
             "vapid_public_key": os.environ.get("VAPID_PUBLIC_KEY", ""),
         },
     )
+
+
+def _current_roommate_or_redirect(request):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return None, redirect("home")
+    return roommate, None
+
+
+def ai_prompt(request):
+    roommate, redirect_response = _current_roommate_or_redirect(request)
+    if redirect_response:
+        return redirect_response
+    if request.method != "POST":
+        return redirect("chore_list")
+
+    text = request.POST.get("text", "").strip()
+    if not text:
+        return redirect("chore_list")
+
+    result = handle_prompt(roommate.household, roommate, text)
+    return render(
+        request,
+        "ai_result.html",
+        {"roommate": roommate, "result": result, "prompt_text": text},
+    )
+
+
+def ai_confirm(request):
+    roommate, redirect_response = _current_roommate_or_redirect(request)
+    if redirect_response:
+        return redirect_response
+    if request.method != "POST":
+        return redirect("chore_list")
+
+    kind = request.POST.get("kind")
+    if kind == "chore":
+        payload = {
+            "name": request.POST.get("name"),
+            "notes": request.POST.get("notes", ""),
+            "effort": request.POST.get("effort"),
+            "recurrence": request.POST.get("recurrence"),
+            "custom_count": request.POST.get("custom_count"),
+            "custom_unit": request.POST.get("custom_unit"),
+            "reminder_time": request.POST.get("reminder_time"),
+        }
+        draft = _normalize_chore_payload(payload)
+        if draft is None:
+            messages.error(request, "That chore draft was not valid.")
+            return redirect("chore_list")
+        reminder_time = datetime.strptime(draft["reminder_time"], "%H:%M").time()
+        chore = Chore(
+            household=roommate.household,
+            name=draft["name"],
+            notes=draft["notes"],
+            effort=draft["effort"],
+            recurrence_kind=draft["recurrence"],
+            custom_count=draft["custom_count"],
+            custom_unit=draft["custom_unit"],
+            reminder_time=reminder_time,
+            due_at=_first_due(reminder_time),
+            status=Chore.Status.ASSIGNED,
+            assignee=pick_assignee(roommate.household),
+        )
+        chore.save()
+        messages.success(request, f'Chore "{chore.name}" created.')
+        return redirect("chore_list")
+
+    if kind == "swap":
+        target_id = request.POST.get("target_id")
+        target = (
+            roommate.household.roommates.filter(id=target_id).first()
+            if target_id and target_id.isdigit()
+            else None
+        )
+        chore = (
+            roommate.household.chores.filter(assignee=roommate)
+            .exclude(status=Chore.Status.SWAP_REQUESTED)
+            .order_by("due_at")
+            .first()
+        )
+        if target is None or chore is None:
+            messages.error(
+                request, "Could not create the swap request from that draft."
+            )
+            return redirect("chore_list")
+        try:
+            request_swap_service(chore, roommate, target)
+        except SwapError:
+            messages.error(request, "Could not create the swap request.")
+            return redirect("chore_list")
+        messages.success(
+            request, f"Swap request sent to {target.display_name}."
+        )
+        return redirect("chore_list")
+
+    messages.error(request, "Unknown confirmation type.")
+    return redirect("chore_list")
 
 
 def _first_due(reminder_time):

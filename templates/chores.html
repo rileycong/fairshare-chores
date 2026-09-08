@@ -49,4 +49,18 @@
 {% if not has_chores %}
 <p>No chores yet.</p>
 {% endif %}
+
+<section class="ai-box">
+    <h2>Ask the assistant</h2>
+    {% if messages %}
+    {% for message in messages %}
+    <p class="errorlist">{{ message }}</p>
+    {% endfor %}
+    {% endif %}
+    <form method="post" action="{% url 'ai_prompt' %}">
+        {% csrf_token %}
+        <input type="text" name="text" placeholder="e.g. add vacuuming every two weeks" maxlength="300">
+        <button type="submit">Ask</button>
+    </form>
+</section>
 {% endblock %}

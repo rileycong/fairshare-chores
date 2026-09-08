@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Ask the assistant</h1>
+
+{% if not result.ok %}
+<section>
+    <p>{{ result.message }}</p>
+</section>
+{% elif result.action == "explain" or result.action == "suggest" %}
+<section>
+    <h2>{{ result.action|title }}</h2>
+    <p>{{ result.message }}</p>
+</section>
+{% elif result.action == "create_chore" %}
+<section>
+    <h2>Confirm new chore</h2>
+    <ul>
+        <li>Name: {{ result.draft.name }}</li>
+        {% if result.draft.notes %}<li>Notes: {{ result.draft.notes }}</li>{% endif %}
+        <li>Effort: {{ result.draft.effort }}</li>
+        <li>Recurrence: {{ result.draft.recurrence }}{% if result.draft.recurrence == "custom" %} (every {{ result.draft.custom_count }} {{ result.draft.custom_unit }}){% endif %}</li>
+        <li>Reminder time: {{ result.draft.reminder_time }}</li>
+    </ul>
+    <form method="post" action="{% url 'ai_confirm' %}">
+        {% csrf_token %}
+        <input type="hidden" name="kind" value="chore">
+        <input type="hidden" name="name" value="{{ result.draft.name }}">
+        <input type="hidden" name="notes" value="{{ result.draft.notes }}">
+        <input type="hidden" name="effort" value="{{ result.draft.effort }}">
+        <input type="hidden" name="recurrence" value="{{ result.draft.recurrence }}">
+        <input type="hidden" name="custom_count" value="{{ result.draft.custom_count }}">
+        <input type="hidden" name="custom_unit" value="{{ result.draft.custom_unit }}">
+        <input type="hidden" name="reminder_time" value="{{ result.draft.reminder_time }}">
+        <button type="submit">Confirm and create</button>
+    </form>
+    <p><a href="{% url 'chore_list' %}">Cancel</a></p>
+</section>
+{% elif result.action == "create_swap" %}
+<section>
+    <h2>Confirm swap request</h2>
+    <p>Ask {{ result.draft.target_name }} to take your chore?</p>
+    <form method="post" action="{% url 'ai_confirm' %}">
+        {% csrf_token %}
+        <input type="hidden" name="kind" value="swap">
+        <input type="hidden" name="target_id" value="{{ result.draft.target_id }}">
+        <button type="submit">Confirm and request</button>
+    </form>
+    <p><a href="{% url 'chore_list' %}">Cancel</a></p>
+</section>
+{% endif %}
+
+<p><a href="{% url 'chore_list' %}">Back to chores</a></p>
+{% endblock %}
