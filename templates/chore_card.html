@@ -13,5 +13,16 @@
         {% csrf_token %}
         <button type="submit">Mark done</button>
     </form>
+    {% if other_roommates %}
+    <form method="post" action="{% url 'request_swap' chore.id %}" class="swap-form">
+        {% csrf_token %}
+        <select name="target_id">
+            {% for r in other_roommates %}
+            <option value="{{ r.id }}">{{ r.display_name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Request swap</button>
+    </form>
+    {% endif %}
     {% endif %}
 </article>

@@ -8,12 +8,15 @@ from django.http import HttpResponseForbidden
 from django.utils import timezone
 
 from .forms import ChoreForm, CreateHouseholdForm, JoinHouseholdForm
-from .models import Chore, Household, Roommate, Supply
+from .models import Chore, Household, Roommate, Supply, SwapRequest
 from .services import (
     CompletionError,
+    SwapError,
     complete_chore as complete_chore_service,
     next_due,
     pick_assignee,
+    request_swap as request_swap_service,
+    respond_to_swap as respond_to_swap_service,
 )
 
 SESSION_KEY = "roommate_id"
@@ -156,6 +159,10 @@ def chore_list(request):
         {
             "roommate": roommate,
             "has_chores": bool(chores),
+            "other_roommates": roommate.household.roommates.exclude(id=roommate.id),
+            "incoming_swaps": SwapRequest.objects.filter(
+                target=roommate, status=SwapRequest.Status.PENDING
+            ).select_related("chore", "requested_by"),
             "groups": [
                 ("overdue", "Overdue", grouped["overdue"]),
                 ("swap_requested", "Swap requested", grouped["swap_requested"]),
@@ -163,6 +170,44 @@ def chore_list(request):
             ],
         },
     )
+
+
+def request_swap_view(request, chore_id):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return redirect("home")
+    chore = get_object_or_404(Chore, id=chore_id, household=roommate.household)
+    if request.method != "POST":
+        return redirect("chore_list")
+    raw_target = request.POST.get("target_id")
+    target = None
+    if raw_target is not None and str(raw_target).isdigit():
+        target = Roommate.objects.filter(
+            id=int(raw_target), household=roommate.household
+        ).first()
+    try:
+        request_swap_service(chore, roommate, target)
+    except SwapError:
+        return HttpResponseForbidden(
+            "Swap request failed. Choose a different roommate for this chore."
+        )
+    return redirect("chore_list")
+
+
+def respond_swap_view(request, swap_id, decision):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return redirect("home")
+    swap = get_object_or_404(
+        SwapRequest, id=swap_id, chore__household=roommate.household
+    )
+    if request.method != "POST":
+        return redirect("chore_list")
+    try:
+        respond_to_swap_service(swap, roommate, accept=(decision == "accept"))
+    except SwapError:
+        return HttpResponseForbidden("Only the chosen roommate can respond.")
+    return redirect("chore_list")
 
 
 def _first_due(reminder_time):

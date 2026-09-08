@@ -8,6 +8,25 @@
     <a href="{% url 'chore_list' %}">Refresh</a>
 </p>
 
+{% if incoming_swaps %}
+<section class="swap-requests">
+    <h2>Swap requests for you</h2>
+    {% for swap in incoming_swaps %}
+    <div class="swap-request">
+        <p>{{ swap.requested_by.display_name }} asks you to take "{{ swap.chore.name }}"</p>
+        <form method="post" action="{% url 'accept_swap' swap.id %}">
+            {% csrf_token %}
+            <button type="submit">Accept</button>
+        </form>
+        <form method="post" action="{% url 'decline_swap' swap.id %}">
+            {% csrf_token %}
+            <button type="submit">Decline</button>
+        </form>
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+
 {% for css, label, group_chores in groups %}
     {% if group_chores %}
     <section class="chore-group group-{{ css }}">
