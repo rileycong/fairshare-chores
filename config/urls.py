@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import path
 
-from chores import views
+from chores import views, webhooks
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,6 +27,7 @@ urlpatterns = [
     path('icons/icon-<int:size>.png', views.app_icon, name='app_icon'),
     path('service-worker.js', views.service_worker, name='service_worker'),
     path('offline/', views.offline, name='offline'),
+    path('webhooks/whatsapp/', webhooks.whatsapp_webhook, name='whatsapp_webhook'),
 ]
 
 if settings.DEBUG:
