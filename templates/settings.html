@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Settings</h1>
+
+<section>
+    <h2>Your details</h2>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {{ form.as_p }}
+        <button type="submit">Save</button>
+    </form>
+</section>
+
+<section>
+    <h2>Household</h2>
+    <p>Share this join code with roommates:</p>
+    <p class="join-code">{{ join_code }}</p>
+</section>
+
+<section>
+    <h2>Notifications</h2>
+    <p>Web push notifications: <em>coming soon</em> (enable reminders in a future update).</p>
+</section>
+
+<p><a href="{% url 'chore_list' %}">Back to chores</a></p>
+{% endblock %}

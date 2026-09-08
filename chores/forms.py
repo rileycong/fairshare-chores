@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import Chore, Supply
+from .models import Chore, Roommate, Supply
 
 WHATSAPP_REGEX = r"^\+[1-9]\d{7,14}$"
 
@@ -45,6 +45,53 @@ class JoinHouseholdForm(forms.Form):
             return Household.objects.get(join_code=code)
         except Household.DoesNotExist:
             raise forms.ValidationError("Unknown join code. Check with your roommate.")
+
+
+class SettingsForm(forms.ModelForm):
+    whatsapp_number = WhatsAppNumberField()
+    new_pin = forms.CharField(
+        min_length=4,
+        max_length=8,
+        required=False,
+        widget=forms.PasswordInput,
+        help_text="Leave blank to keep your current PIN",
+    )
+    current_pin = forms.CharField(
+        max_length=8,
+        required=False,
+        widget=forms.PasswordInput,
+        help_text="Required only when setting a new PIN",
+    )
+
+    class Meta:
+        model = Roommate
+        fields = ["display_name", "whatsapp_number"]
+
+    def clean_whatsapp_number(self):
+        number = self.cleaned_data.get("whatsapp_number", "")
+        query = Roommate.objects.filter(
+            household_id=self.instance.household_id, whatsapp_number=number
+        )
+        if self.instance.pk:
+            query = query.exclude(pk=self.instance.pk)
+        if query.exists():
+            raise forms.ValidationError(
+                "Another roommate in this household already uses this number."
+            )
+        return number
+
+    def clean(self):
+        cleaned = super().clean()
+        new_pin = cleaned.get("new_pin")
+        current_pin = cleaned.get("current_pin")
+        if new_pin:
+            if not current_pin:
+                self.add_error(
+                    "current_pin", "Enter your current PIN to set a new one."
+                )
+            elif self.instance.pk and not self.instance.check_pin(current_pin):
+                self.add_error("current_pin", "Current PIN is incorrect.")
+        return cleaned
 
 
 class ChoreForm(forms.ModelForm):

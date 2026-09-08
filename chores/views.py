@@ -8,7 +8,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import HttpResponseForbidden
 from django.utils import timezone
 
-from .forms import ChoreForm, CreateHouseholdForm, JoinHouseholdForm
+from .forms import (
+    ChoreForm,
+    CreateHouseholdForm,
+    JoinHouseholdForm,
+    SettingsForm,
+)
 from .models import Chore, HistoryRecord, Household, Roommate, Supply, SwapRequest
 from .services import (
     CompletionError,
@@ -250,6 +255,34 @@ def history_list(request):
         request,
         "history.html",
         {"roommate": roommate, "page_obj": page_obj},
+    )
+
+
+def settings_view(request):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return redirect("home")
+
+    if request.method == "POST":
+        form = SettingsForm(request.POST, instance=roommate)
+        if form.is_valid():
+            roommate = form.save(commit=False)
+            new_pin = form.cleaned_data.get("new_pin")
+            if new_pin:
+                roommate.set_pin(new_pin)
+            roommate.save()
+            return redirect("settings")
+    else:
+        form = SettingsForm(instance=roommate)
+
+    return render(
+        request,
+        "settings.html",
+        {
+            "roommate": roommate,
+            "form": form,
+            "join_code": roommate.household.join_code,
+        },
     )
 
 
