@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block vapid_key %}{{ vapid_public_key }}{% endblock %}
+
 {% block content %}
 <h1>Settings</h1>
 
@@ -21,8 +23,19 @@
 
 <section>
     <h2>Notifications</h2>
-    <p>Web push notifications: <em>coming soon</em> (enable reminders in a future update).</p>
+    <p id="push-status">
+        {% if vapid_public_key %}Get a reminder on this device when a chore is due.{% else %}Web push is not configured on the server yet.{% endif %}
+    </p>
+    <button id="enable-push" type="button"
+            {% if not vapid_public_key %}disabled{% endif %}>
+        Enable web push
+    </button>
 </section>
 
 <p><a href="{% url 'chore_list' %}">Back to chores</a></p>
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% static 'js/push.js' %}"></script>
 {% endblock %}

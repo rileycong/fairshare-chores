@@ -1,13 +1,22 @@
 from datetime import timedelta
 
+import json
+import os
 import secrets
 import string
 
 from django.contrib.staticfiles import finders
 from django.core.paginator import Paginator
-from django.http import FileResponse, Http404, HttpResponseForbidden
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponseBadRequest,
+    HttpResponseForbidden,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .forms import (
     ChoreForm,
@@ -15,7 +24,15 @@ from .forms import (
     JoinHouseholdForm,
     SettingsForm,
 )
-from .models import Chore, HistoryRecord, Household, Roommate, Supply, SwapRequest
+from .models import (
+    Chore,
+    HistoryRecord,
+    Household,
+    PushSubscription,
+    Roommate,
+    Supply,
+    SwapRequest,
+)
 from .services import (
     CompletionError,
     SwapError,
@@ -284,6 +301,31 @@ def offline(request):
     return render(request, "offline.html")
 
 
+@require_POST
+def push_subscribe(request):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return JsonResponse({"error": "not signed in"}, status=403)
+    try:
+        data = json.loads(request.body)
+        endpoint = data["endpoint"]
+        keys = data["keys"]
+        p256dh = keys["p256dh"]
+        auth = keys["auth"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return HttpResponseBadRequest("invalid subscription payload")
+
+    PushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={
+            "roommate": roommate,
+            "p256dh": p256dh,
+            "auth": auth,
+        },
+    )
+    return JsonResponse({"ok": True})
+
+
 def settings_view(request):
     roommate = get_roommate(request)
     if roommate is None:
@@ -308,6 +350,7 @@ def settings_view(request):
             "roommate": roommate,
             "form": form,
             "join_code": roommate.household.join_code,
+            "vapid_public_key": os.environ.get("VAPID_PUBLIC_KEY", ""),
         },
     )
 

@@ -22,6 +22,7 @@ urlpatterns = [
     path('supplies/<int:supply_id>/toggle/', views.toggle_supply, name='toggle_supply'),
     path('history/', views.history_list, name='history_list'),
     path('settings/', views.settings_view, name='settings'),
+    path('push/subscribe/', views.push_subscribe, name='push_subscribe'),
     path('manifest.webmanifest', views.manifest, name='manifest'),
     path('icons/icon-<int:size>.png', views.app_icon, name='app_icon'),
     path('service-worker.js', views.service_worker, name='service_worker'),
