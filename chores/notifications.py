@@ -4,6 +4,8 @@ import os
 
 from pywebpush import WebPushException, webpush
 
+from . import whatsapp
+
 logger = logging.getLogger(__name__)
 
 
@@ -15,7 +17,7 @@ def _vapid_config():
     return {"sub": subject}, private_key
 
 
-def notify_roommate(roommate, title, body):
+def send_web_push(roommate, title, body):
     config = _vapid_config()
     if config is None:
         logger.info(
@@ -54,3 +56,12 @@ def notify_roommate(roommate, title, body):
                 logger.warning(
                     "web push failed for subscription %s: %s", subscription.id, exc
                 )
+
+
+def send_whatsapp(roommate, title, body):
+    whatsapp.send_message(roommate.whatsapp_number, f"{title}: {body}")
+
+
+def notify_roommate(roommate, title, body):
+    send_web_push(roommate, title, body)
+    send_whatsapp(roommate, title, body)
