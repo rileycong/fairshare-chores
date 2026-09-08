@@ -1,0 +1,17 @@
+# Dependencies and build outputs
+node_modules/
+dist/
+build/
+.next/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Tooling and operating-system files
+.DS_Store
+.idea/
+.vscode/
+coverage/
+
