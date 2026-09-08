@@ -15,3 +15,10 @@ build/
 .vscode/
 coverage/
 
+# Python and Django
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+db.sqlite3
+

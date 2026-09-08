@@ -1,0 +1,24 @@
+[project]
+name = "fairshare-chores"
+version = "0.1.0"
+description = "FairShare Chores — fair household chore rotation for 2-4 roommates"
+requires-python = ">=3.9"
+dependencies = [
+    "django~=4.2.30",
+    "python-dateutil>=2.8",
+    "requests>=2.31",
+    "pywebpush>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-django>=4.8",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+testpaths = ["tests"]
+
+[tool.uv]
+package = false
