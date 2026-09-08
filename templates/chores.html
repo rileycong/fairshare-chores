@@ -2,7 +2,11 @@
 
 {% block content %}
 <h1>Chores</h1>
-<p><a href="{% url 'chore_list' %}">Refresh</a></p>
+<p>
+    <a href="{% url 'chore_create' %}">Add chore</a>
+    &middot;
+    <a href="{% url 'chore_list' %}">Refresh</a>
+</p>
 
 {% for css, label, group_chores in groups %}
     {% if group_chores %}

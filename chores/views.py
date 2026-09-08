@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import secrets
 import string
 
@@ -5,9 +7,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import HttpResponseForbidden
 from django.utils import timezone
 
-from .forms import CreateHouseholdForm, JoinHouseholdForm
-from .models import Chore, Household, Roommate
-from .services import CompletionError, complete_chore as complete_chore_service
+from .forms import ChoreForm, CreateHouseholdForm, JoinHouseholdForm
+from .models import Chore, Household, Roommate, Supply
+from .services import (
+    CompletionError,
+    complete_chore as complete_chore_service,
+    next_due,
+    pick_assignee,
+)
 
 SESSION_KEY = "roommate_id"
 MAX_ROOMMATES = 4
@@ -155,6 +162,80 @@ def chore_list(request):
                 ("assigned", "Assigned", grouped["assigned"]),
             ],
         },
+    )
+
+
+def _first_due(reminder_time):
+    now_local = timezone.localtime(timezone.now())
+    candidate = now_local.replace(
+        hour=reminder_time.hour, minute=reminder_time.minute, second=0, microsecond=0
+    )
+    if candidate <= now_local:
+        candidate += timedelta(days=1)
+    return candidate
+
+
+def _apply_new_supply(form, household, chore):
+    new_supply_name = form.cleaned_data.get("new_supply_name")
+    if new_supply_name:
+        supply, _ = Supply.objects.get_or_create(
+            household=household, name=new_supply_name
+        )
+        chore.supply = supply
+    return chore
+
+
+def chore_create(request):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return redirect("home")
+
+    if request.method == "POST":
+        form = ChoreForm(request.POST, household=roommate.household)
+        if form.is_valid():
+            chore = form.save(commit=False)
+            chore.household = roommate.household
+            _apply_new_supply(form, roommate.household, chore)
+            chore.due_at = _first_due(form.cleaned_data["reminder_time"])
+            chore.status = Chore.Status.ASSIGNED
+            chore.assignee = pick_assignee(roommate.household)
+            chore.save()
+            return redirect("chore_list")
+    else:
+        form = ChoreForm(household=roommate.household)
+
+    return render(request, "chore_form.html", {"roommate": roommate, "form": form})
+
+
+RECURRENCE_FIELDS = ("recurrence_kind", "custom_count", "custom_unit")
+
+
+def chore_edit(request, chore_id):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return redirect("home")
+    chore = get_object_or_404(Chore, id=chore_id, household=roommate.household)
+
+    if request.method == "POST":
+        previous = {field: getattr(chore, field) for field in RECURRENCE_FIELDS}
+        form = ChoreForm(request.POST, instance=chore, household=roommate.household)
+        if form.is_valid():
+            chore = form.save(commit=False)
+            _apply_new_supply(form, roommate.household, chore)
+            changed = any(
+                getattr(chore, field) != previous[field] for field in RECURRENCE_FIELDS
+            )
+            if changed:
+                chore.due_at = next_due(chore)
+            chore.save()
+            return redirect("chore_list")
+    else:
+        form = ChoreForm(instance=chore, household=roommate.household)
+
+    return render(
+        request,
+        "chore_form.html",
+        {"roommate": roommate, "form": form, "chore": chore},
     )
 
 

@@ -1,5 +1,7 @@
 from django import forms
 
+from .models import Chore, Supply
+
 WHATSAPP_REGEX = r"^\+[1-9]\d{7,14}$"
 
 
@@ -43,3 +45,50 @@ class JoinHouseholdForm(forms.Form):
             return Household.objects.get(join_code=code)
         except Household.DoesNotExist:
             raise forms.ValidationError("Unknown join code. Check with your roommate.")
+
+
+class ChoreForm(forms.ModelForm):
+    new_supply_name = forms.CharField(
+        max_length=120,
+        required=False,
+        help_text="Or add a new supply by name",
+    )
+
+    class Meta:
+        model = Chore
+        fields = [
+            "name",
+            "notes",
+            "effort",
+            "recurrence_kind",
+            "custom_count",
+            "custom_unit",
+            "reminder_time",
+            "supply",
+        ]
+        widgets = {
+            "custom_count": forms.NumberInput(attrs={"min": 1}),
+        }
+
+    def __init__(self, *args, household=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if household is not None:
+            self.fields["supply"].queryset = household.supplies.all()
+        else:
+            self.fields["supply"].queryset = Supply.objects.none()
+        self.fields["supply"].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("recurrence_kind") == Chore.RecurrenceKind.CUSTOM:
+            count = cleaned.get("custom_count")
+            unit = cleaned.get("custom_unit")
+            if count is None:
+                self.add_error(
+                    "custom_count", "Custom recurrence needs an interval count."
+                )
+            elif count < 1:
+                self.add_error("custom_count", "Interval must be at least 1.")
+            if not unit:
+                self.add_error("custom_unit", "Custom recurrence needs a unit.")
+        return cleaned
