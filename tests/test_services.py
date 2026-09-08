@@ -5,9 +5,17 @@ from chores.models import Chore, HistoryRecord
 from chores.services import pick_assignee
 
 
-def make_household(join_code="ABCD12"):
+def make_household(join_code=None):
     from chores.models import Household
 
+    if join_code is None:
+        import itertools
+
+        for suffix in itertools.count():
+            candidate = f"T{suffix:05d}"
+            if not Household.objects.filter(join_code=candidate).exists():
+                join_code = candidate
+                break
     return Household.objects.create(join_code=join_code)
 
 
