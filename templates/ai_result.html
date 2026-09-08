@@ -37,6 +37,32 @@
     </form>
     <p><a href="{% url 'chore_list' %}">Cancel</a></p>
 </section>
+{% elif result.action == "edit_chore" %}
+<section>
+    <h2>Confirm chore update</h2>
+    <p>Update <strong>{{ result.draft.chore_name }}</strong>:</p>
+    <ul>
+        {% if result.draft.fields.reminder_time %}
+        <li>Reminder time → {{ result.draft.fields.reminder_time }}</li>
+        {% endif %}
+        {% if result.draft.fields.effort %}
+        <li>Effort → {{ result.draft.fields.effort }}</li>
+        {% endif %}
+        {% if result.draft.fields.recurrence_kind %}
+        <li>Recurrence → {{ result.draft.fields.recurrence_kind }}{% if result.draft.fields.recurrence_kind == "custom" %} (every {{ result.draft.fields.custom_count }} {{ result.draft.fields.custom_unit }}){% endif %}</li>
+        {% endif %}
+    </ul>
+    <form method="post" action="{% url 'ai_confirm' %}">
+        {% csrf_token %}
+        <input type="hidden" name="kind" value="edit_chore">
+        <input type="hidden" name="chore_id" value="{{ result.draft.chore_id }}">
+        {% for field, value in result.draft.fields.items %}
+        <input type="hidden" name="{{ field }}" value="{{ value }}">
+        {% endfor %}
+        <button type="submit">Confirm and update</button>
+    </form>
+    <p><a href="{% url 'chore_list' %}">Cancel</a></p>
+</section>
 {% elif result.action == "create_swap" %}
 <section>
     <h2>Confirm swap request</h2>

@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .ai import _normalize_chore_payload, handle_prompt
+from .ai import _normalize_chore_payload, _normalize_edit_fields, handle_prompt
 from .forms import (
     ChoreForm,
     CreateHouseholdForm,
@@ -428,6 +428,44 @@ def ai_confirm(request):
         )
         chore.save()
         messages.success(request, f'Chore "{chore.name}" created.')
+        return redirect("chore_list")
+
+    if kind == "edit_chore":
+        chore_id = request.POST.get("chore_id")
+        chore = (
+            Chore.objects.filter(id=chore_id, household=roommate.household).first()
+            if chore_id and chore_id.isdigit()
+            else None
+        )
+        if chore is None:
+            messages.error(request, "That chore no longer exists.")
+            return redirect("chore_list")
+
+        fields = {}
+        if request.POST.get("reminder_time"):
+            fields["reminder_time"] = request.POST.get("reminder_time")
+        if request.POST.get("effort"):
+            fields["effort"] = request.POST.get("effort")
+        if request.POST.get("recurrence_kind"):
+            fields["recurrence_kind"] = request.POST.get("recurrence_kind")
+            fields["custom_count"] = request.POST.get("custom_count")
+            fields["custom_unit"] = request.POST.get("custom_unit")
+        fields = _normalize_edit_fields(fields)
+        if not fields:
+            messages.error(request, "That chore edit was not valid.")
+            return redirect("chore_list")
+
+        recurrence_changed = "recurrence_kind" in fields and (
+            chore.recurrence_kind != fields["recurrence_kind"]
+            or chore.custom_count != fields.get("custom_count")
+            or chore.custom_unit != fields.get("custom_unit")
+        )
+        for field, value in fields.items():
+            setattr(chore, field, value)
+        if recurrence_changed:
+            chore.due_at = next_due(chore)
+        chore.save()
+        messages.success(request, f'Chore "{chore.name}" updated.')
         return redirect("chore_list")
 
     if kind == "swap":

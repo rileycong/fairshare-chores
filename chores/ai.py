@@ -14,12 +14,12 @@ DEFAULT_BASE_URL = "https://api.llmgateway.ai/v1"
 DEFAULT_MODEL = "zai/glm-4.5-flash"
 REQUEST_TIMEOUT_SECONDS = 15
 
-VALID_ACTIONS = {"explain", "suggest", "create_chore", "create_swap"}
+VALID_ACTIONS = {"explain", "suggest", "create_chore", "create_swap", "edit_chore"}
 
 SYSTEM_PROMPT = """You are the assistant of FairShare Chores, a household chore rotation app.
-You help roommates understand fair chore assignment and draft chores or swaps.
+You help roommates understand fair chore assignment, draft chores or swaps, and edit existing chore settings.
 Respond with ONLY a JSON object, no markdown fences, in this exact shape:
-{"action": "explain" | "suggest" | "create_chore" | "create_swap",
+{"action": "explain" | "suggest" | "create_chore" | "create_swap" | "edit_chore",
  "message": "short helpful text for explain or suggest, empty string otherwise",
  "payload": {}}
 For "create_chore" the payload must be:
@@ -28,8 +28,14 @@ For "create_chore" the payload must be:
  "custom_count": integer or null, "custom_unit": "hours"|"days"|"weeks"|"months" or null,
  "reminder_time": "HH:MM"}
 For "create_swap" the payload must be: {"target_name": string}
+For "edit_chore" the payload must contain "chore_name" (the existing chore to change) and
+ONLY the fields to change, from: {"reminder_time": "HH:MM", "effort": "small"|"medium"|"large",
+ "recurrence": "daily"|"weekly"|"monthly"|"custom",
+ "custom_count": integer, "custom_unit": "hours"|"days"|"weeks"|"months"}
+Point totals of roommates can never be edited.
 Use "explain" when asked why an assignment is fair, "suggest" when asked who should do
-something next, "create_chore" to draft a new chore, "create_swap" to draft a swap request."""
+something next, "create_chore" to draft a new chore, "create_swap" to draft a swap request,
+and "edit_chore" to change an existing chore's settings."""
 
 
 def _config():
@@ -105,7 +111,7 @@ def _parse_reminder_time(lower):
     return "09:00"
 
 
-def _parse_recurrence(lower):
+def _match_recurrence(lower):
     match = re.search(
         r"\b(?:every|each)\s+(\d+|[a-z]+)?\s*(hours?|days?|weeks?|months?)\b", lower
     )
@@ -123,7 +129,14 @@ def _parse_recurrence(lower):
         return "weekly", None, None
     if re.search(r"\bmonthly\b|\bevery month\b", lower):
         return "monthly", None, None
-    return "daily", None, None
+    return None
+
+
+def _parse_recurrence(lower):
+    matched = _match_recurrence(lower)
+    if matched is None:
+        return "daily", None, None
+    return matched
 
 
 def _parse_chore_draft(text):
@@ -186,6 +199,118 @@ def _parse_swap_target(text, household):
     )
 
 
+EDIT_INTENT = re.compile(r"\b(change|set|update|move|edit|reschedule)\b")
+
+
+def _normalize_time_value(value):
+    match = re.fullmatch(r"(\d{1,2}):(\d{1,2})", str(value or "").strip())
+    if not match:
+        return None
+    hour, minute = int(match.group(1)), int(match.group(2))
+    if 0 <= hour <= 23 and 0 <= minute <= 59:
+        return f"{hour:02d}:{minute:02d}"
+    return None
+
+
+def _normalize_edit_fields(fields):
+    normalized = {}
+    if "reminder_time" in fields:
+        reminder = _normalize_time_value(fields.get("reminder_time"))
+        if reminder is None:
+            return None
+        normalized["reminder_time"] = reminder
+    if "effort" in fields:
+        if fields["effort"] not in Chore.Effort.values:
+            return None
+        normalized["effort"] = fields["effort"]
+    if "recurrence_kind" in fields:
+        if fields["recurrence_kind"] not in Chore.RecurrenceKind.values:
+            return None
+        normalized["recurrence_kind"] = fields["recurrence_kind"]
+    if normalized.get("recurrence_kind") == Chore.RecurrenceKind.CUSTOM:
+        try:
+            count = int(fields.get("custom_count"))
+        except (TypeError, ValueError):
+            return None
+        if count < 1 or fields.get("custom_unit") not in Chore.CustomUnit.values:
+            return None
+        normalized["custom_count"] = count
+        normalized["custom_unit"] = fields["custom_unit"]
+    elif "recurrence_kind" in fields:
+        normalized["custom_count"] = None
+        normalized["custom_unit"] = None
+    return normalized
+
+
+def _match_chore_by_name(text, household):
+    lower = text.lower()
+    best = None
+    best_score = 0
+    for chore in household.chores.all():
+        tokens = [w for w in re.split(r"\W+", chore.name.lower()) if len(w) > 2]
+        if not tokens:
+            continue
+        score = sum(1 for token in tokens if token in lower)
+        if chore.name.lower() in lower:
+            score += len(tokens)
+        if score > best_score:
+            best = chore
+            best_score = score
+    return best
+
+
+def _parse_chore_edit(text, household):
+    lower = text.lower()
+    chore = _match_chore_by_name(text, household)
+    if chore is None:
+        available = ", ".join(
+            chore.name for chore in household.chores.all()
+        ) or "no chores yet"
+        return None, None, (
+            "I couldn't tell which chore you mean. Household chores: " + available + "."
+        )
+
+    fields = {}
+    reminder_match = re.search(
+        r"\b(?:to|at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", lower
+    )
+    if reminder_match:
+        hour = int(reminder_match.group(1))
+        minute = int(reminder_match.group(2) or 0)
+        meridiem = reminder_match.group(3)
+        if meridiem == "pm" and hour < 12:
+            hour += 12
+        if meridiem == "am" and hour == 12:
+            hour = 0
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            fields["reminder_time"] = f"{hour:02d}:{minute:02d}"
+
+    matched_recurrence = _match_recurrence(lower)
+    if matched_recurrence:
+        kind, count, unit = matched_recurrence
+        fields["recurrence_kind"] = kind
+        fields["custom_count"] = count
+        fields["custom_unit"] = unit
+
+    for effort, word in (
+        (Chore.Effort.LARGE, "large"),
+        (Chore.Effort.MEDIUM, "medium"),
+        (Chore.Effort.SMALL, "small"),
+    ):
+        if re.search(rf"\b{word}\b", lower) and word not in chore.name.lower():
+            fields["effort"] = effort
+            break
+
+    fields = _normalize_edit_fields(fields)
+    if not fields:
+        return None, None, (
+            "I couldn't tell what to change. Try "
+            '"change take out rubbish reminder to 8am" or '
+            '"set water plants to every 3 days".'
+        )
+    return chore, fields, None
+
+
 def _fallback_result(text, household):
     lower = text.lower()
 
@@ -198,6 +323,26 @@ def _fallback_result(text, household):
             "action": "create_swap",
             "message": "",
             "draft": {"target_id": target.id, "target_name": target.display_name},
+        }
+
+    matched_chore = _match_chore_by_name(text, household)
+    wants_edit = bool(EDIT_INTENT.search(lower)) or (
+        matched_chore is not None
+        and not re.search(r"\b(add|create|new)\b", lower)
+    )
+    if wants_edit:
+        chore, fields, error = _parse_chore_edit(text, household)
+        if error:
+            return {"ok": False, "action": None, "message": error}
+        return {
+            "ok": True,
+            "action": "edit_chore",
+            "message": "",
+            "draft": {
+                "chore_id": chore.id,
+                "chore_name": chore.name,
+                "fields": fields,
+            },
         }
 
     if DRAFT_INTENT.search(lower):
@@ -343,6 +488,40 @@ def handle_prompt(household, roommate, text):
         }
 
     payload = result.get("payload") or {}
+
+    if action == "edit_chore":
+        chore_name = str(payload.get("chore_name", "")).strip().lower()
+        chore = None
+        for candidate in household.chores.all():
+            if candidate.name.lower() == chore_name:
+                chore = candidate
+                break
+        if chore is None:
+            return _error_result(
+                f'I couldn\'t find a chore named "{chore_name}" in this household.'
+            )
+        fields = {
+            key: payload[key]
+            for key in ("reminder_time", "effort", "custom_count", "custom_unit")
+            if key in payload
+        }
+        if "recurrence" in payload:
+            fields["recurrence_kind"] = payload["recurrence"]
+        fields = _normalize_edit_fields(fields)
+        if not fields:
+            return _error_result(
+                "The assistant could not build valid chore changes from that request."
+            )
+        return {
+            "ok": True,
+            "action": action,
+            "message": "",
+            "draft": {
+                "chore_id": chore.id,
+                "chore_name": chore.name,
+                "fields": fields,
+            },
+        }
 
     if action == "create_chore":
         draft = _normalize_chore_payload(payload)
