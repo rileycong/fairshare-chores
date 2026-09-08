@@ -117,11 +117,10 @@ def respond_to_swap(swap_request: SwapRequest, responder: Roommate, accept: bool
     return swap_request
 
 
-def pick_assignee(household: Household) -> Roommate | None:
+def _tied_leaders(household):
     roommates = list(household.roommates.order_by("id"))
     if not roommates:
-        return None
-
+        return []
     totals = {
         roommate.id: (
             roommate.history_records.aggregate(total=Sum("effort_points"))["total"]
@@ -130,11 +129,22 @@ def pick_assignee(household: Household) -> Roommate | None:
         for roommate in roommates
     }
     lowest = min(totals.values())
-    tied = [roommate for roommate in roommates if totals[roommate.id] == lowest]
+    return [roommate for roommate in roommates if totals[roommate.id] == lowest]
 
+
+def preview_assignee(household: Household) -> Roommate | None:
+    tied = _tied_leaders(household)
+    if not tied:
+        return None
+    return tied[household.rotation_counter % len(tied)]
+
+
+def pick_assignee(household: Household) -> Roommate | None:
+    tied = _tied_leaders(household)
+    if not tied:
+        return None
     if len(tied) == 1:
         return tied[0]
-
     chosen = tied[household.rotation_counter % len(tied)]
     household.rotation_counter += 1
     household.save(update_fields=["rotation_counter"])

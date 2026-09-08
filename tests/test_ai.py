@@ -83,7 +83,7 @@ class TestNoKeyFallback:
         assert result["action"] == "suggest"
         assert "Ada" in result["message"]
 
-    def test_draft_requests_report_unavailable_without_key(self, monkeypatch):
+    def test_chore_draft_works_without_key(self, monkeypatch):
         monkeypatch.delenv("LLM_GATEWAY_API_KEY", raising=False)
         household, ada, ben = make_household_with_history()
         chores_before = Chore.objects.count()
@@ -92,9 +92,68 @@ class TestNoKeyFallback:
             household, ada, "add vacuuming every two weeks"
         )
 
-        assert result["ok"] is False
-        assert "API key" in result["message"]
+        assert result["ok"] is True
+        assert result["action"] == "create_chore"
+        assert result["draft"]["name"] == "Vacuuming"
+        assert result["draft"]["recurrence"] == "custom"
+        assert result["draft"]["custom_count"] == 2
+        assert result["draft"]["custom_unit"] == "weeks"
         assert Chore.objects.count() == chores_before
+
+    def test_swap_draft_works_without_key(self, monkeypatch):
+        monkeypatch.delenv("LLM_GATEWAY_API_KEY", raising=False)
+        household, ada, ben = make_household_with_history()
+
+        result = ai.handle_prompt(household, ada, "swap my chore with Ben")
+
+        assert result["ok"] is True
+        assert result["action"] == "create_swap"
+        assert result["draft"] == {"target_id": ben.id, "target_name": "Ben"}
+
+    def test_unparseable_draft_without_key_returns_hint(self, monkeypatch):
+        monkeypatch.delenv("LLM_GATEWAY_API_KEY", raising=False)
+        household, ada, ben = make_household_with_history()
+
+        result = ai.handle_prompt(household, ada, "add")
+
+        assert result["ok"] is False
+        assert "Try" in result["message"]
+
+    def test_draft_parses_effort_time_and_presets(self, monkeypatch):
+        monkeypatch.delenv("LLM_GATEWAY_API_KEY", raising=False)
+        household, ada, ben = make_household_with_history()
+
+        result = ai.handle_prompt(
+            household, ada, "add clean the bathroom large every month at 7pm"
+        )
+
+        assert result["ok"] is True
+        assert result["draft"]["name"] == "Clean the bathroom"
+        assert result["draft"]["effort"] == "large"
+        assert result["draft"]["recurrence"] == "monthly"
+        assert result["draft"]["reminder_time"] == "19:00"
+
+    def test_draft_parses_daily_and_hours(self, monkeypatch):
+        monkeypatch.delenv("LLM_GATEWAY_API_KEY", raising=False)
+        household, ada, ben = make_household_with_history()
+
+        daily = ai.handle_prompt(household, ada, "add bins every day")
+        assert daily["draft"]["recurrence"] == "daily"
+
+        hours = ai.handle_prompt(household, ada, "add check the oven every 3 hours")
+        assert hours["draft"]["recurrence"] == "custom"
+        assert hours["draft"]["custom_count"] == 3
+        assert hours["draft"]["custom_unit"] == "hours"
+
+    def test_swap_with_unknown_name_lists_household(self, monkeypatch):
+        monkeypatch.delenv("LLM_GATEWAY_API_KEY", raising=False)
+        household, ada, ben = make_household_with_history()
+
+        result = ai.handle_prompt(household, ada, "swap my chore with Zoe")
+
+        assert result["ok"] is False
+        assert "Zoe" in result["message"]
+        assert "Ben" in result["message"]
 
 
 @pytest.mark.django_db

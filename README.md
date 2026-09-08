@@ -54,6 +54,6 @@ Env vars: `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` (a `mailto:` 
 
 ## AI assistant
 
-Env vars: `LLM_GATEWAY_API_KEY` (required to enable drafting), `LLM_GATEWAY_BASE_URL` (default `https://api.llmgateway.ai/v1`), `LLM_MODEL` (default `zai/glm-4.5-flash`). Without a key, explain/suggest questions still get a deterministic fairness summary; chore/swap drafts are disabled.
+Env vars: `LLM_GATEWAY_API_KEY` (optional), `LLM_GATEWAY_BASE_URL` (default `https://api.llmgateway.ai/v1`), `LLM_MODEL` (default `zai/glm-4.5-flash`). Without a key, explain/suggest questions get a deterministic fairness summary and simple chore/swap drafts are parsed locally (e.g. `add vacuuming every two weeks`, `swap my chore with Ben`); the LLM adds flexibility for looser phrasing.
 
-All AI actions that change data require explicit confirmation in the app.
+All AI actions that change data require explicit confirmation in the app, and the confirmation shows the assignee chosen automatically (fewest completed points).

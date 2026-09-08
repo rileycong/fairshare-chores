@@ -21,6 +21,7 @@
         <li>Effort: {{ result.draft.effort }}</li>
         <li>Recurrence: {{ result.draft.recurrence }}{% if result.draft.recurrence == "custom" %} (every {{ result.draft.custom_count }} {{ result.draft.custom_unit }}){% endif %}</li>
         <li>Reminder time: {{ result.draft.reminder_time }}</li>
+        <li>Will be assigned to: <strong>{{ result.assignee.display_name|default:"someone" }}</strong> (automatic — fewest completed points)</li>
     </ul>
     <form method="post" action="{% url 'ai_confirm' %}">
         {% csrf_token %}

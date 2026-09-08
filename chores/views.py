@@ -41,6 +41,7 @@ from .services import (
     complete_chore as complete_chore_service,
     next_due,
     pick_assignee,
+    preview_assignee,
     request_swap as request_swap_service,
     respond_to_swap as respond_to_swap_service,
 )
@@ -380,6 +381,8 @@ def ai_prompt(request):
         return redirect("chore_list")
 
     result = handle_prompt(roommate.household, roommate, text)
+    if result.get("ok") and result.get("action") == "create_chore":
+        result["assignee"] = preview_assignee(roommate.household)
     return render(
         request,
         "ai_result.html",

@@ -86,14 +86,34 @@ class TestPromptBox:
         assert response.status_code == 200
         assert "The AI assistant is unavailable right now." in response.content.decode()
 
-    def test_fallback_draft_message_is_readable(self, client, no_api_key):
+    def test_fallback_draft_renders_confirmation_without_key(
+        self, client, no_api_key
+    ):
         household, ada, ben = make_household_with_history()
         sign_in(client, ada)
+        chores_before = Chore.objects.count()
 
         response = client.post("/ai/prompt/", {"text": "add vacuuming every two weeks"})
 
         assert response.status_code == 200
-        assert "API key" in response.content.decode()
+        body = response.content.decode()
+        assert "Confirm new chore" in body
+        assert "Vacuuming" in body
+        assert "Will be assigned to" in body
+        assert Chore.objects.count() == chores_before
+
+    def test_confirmation_preview_does_not_consume_tie_break(
+        self, client, no_api_key, monkeypatch
+    ):
+        from chores.services import pick_assignee, preview_assignee
+
+        household, ada, ben = make_household_with_history()
+        sign_in(client, ada)
+        expected = preview_assignee(household)
+
+        client.post("/ai/prompt/", {"text": "add water the plants every day"})
+
+        assert pick_assignee(household) == expected
 
 
 @pytest.mark.django_db

@@ -66,33 +66,173 @@ def _fairness_lines(totals):
     return lines
 
 
-def _fallback_result(text, household):
-    totals = _effort_totals(household)
-    lower = text.lower()
-    wants_draft = "add" in lower or "create" in lower or "swap" in lower
+NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "eleven": 11, "twelve": 12,
+}
 
-    if wants_draft:
+UNIT_TO_PRESET = {"day": "daily", "week": "weekly", "month": "monthly"}
+UNIT_SINGULAR = {"hours": "hours", "days": "days", "weeks": "weeks", "months": "months"}
+
+DRAFT_INTENT = re.compile(
+    r"\b(add|create|new|make|schedule)\b|\bevery\b|\bdaily\b|\bweekly\b|\bmonthly\b"
+)
+
+
+def _parse_count(token):
+    if token is None:
+        return 1
+    token = token.strip().lower()
+    if token.isdigit():
+        return int(token)
+    return NUMBER_WORDS.get(token)
+
+
+def _parse_reminder_time(lower):
+    match = re.search(r"\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", lower)
+    if not match:
+        return "09:00"
+    hour = int(match.group(1))
+    minute = int(match.group(2) or 0)
+    meridiem = match.group(3)
+    if meridiem == "pm" and hour < 12:
+        hour += 12
+    if meridiem == "am" and hour == 12:
+        hour = 0
+    if 0 <= hour <= 23 and 0 <= minute <= 59:
+        return f"{hour:02d}:{minute:02d}"
+    return "09:00"
+
+
+def _parse_recurrence(lower):
+    match = re.search(
+        r"\b(?:every|each)\s+(\d+|[a-z]+)?\s*(hours?|days?|weeks?|months?)\b", lower
+    )
+    if match:
+        count = _parse_count(match.group(1)) or 1
+        unit = re.sub(r"s$", "", match.group(2))
+        if unit == "hour":
+            return "custom", count, "hours"
+        if count == 1:
+            return UNIT_TO_PRESET[unit], None, None
+        return "custom", count, f"{unit}s"
+    if re.search(r"\bdaily\b|\bevery day\b", lower):
+        return "daily", None, None
+    if re.search(r"\bweekly\b|\bevery week\b", lower):
+        return "weekly", None, None
+    if re.search(r"\bmonthly\b|\bevery month\b", lower):
+        return "monthly", None, None
+    return "daily", None, None
+
+
+def _parse_chore_draft(text):
+    lower = text.lower().strip()
+    if re.search(r"\b(large|heavy|big)\b", lower):
+        effort = Chore.Effort.LARGE
+    elif re.search(r"\b(small|quick|light|easy)\b", lower):
+        effort = Chore.Effort.SMALL
+    else:
+        effort = Chore.Effort.MEDIUM
+
+    reminder_time = _parse_reminder_time(lower)
+    recurrence, custom_count, custom_unit = _parse_recurrence(lower)
+
+    name = lower
+    name = re.sub(
+        r"^(please\s+)?(can you\s+)?(add|create|new|make|schedule|put)(?:\s+"
+        r"(a\s+|an\s+|the\s+)?(?:chore\s+)?(?:to\s+|for\s+)?)?",
+        "",
+        name,
+    )
+    name = re.sub(r"\b(?:every|each)\s+(\d+|[a-z]+)?\s*(hours?|days?|weeks?|months?)\b", "", name)
+    name = re.sub(r"\b(daily|weekly|monthly)\b", "", name)
+    name = re.sub(r"\bat\s+\d{1,2}(?::\d{2})?\s*(am|pm)?\b", "", name)
+    name = re.sub(r"\b(small|medium|large|quick|light|easy|heavy|big)\b", "", name)
+    name = re.sub(r"\bchore\b", "", name)
+    name = name.strip(" .,!?-")
+    if not name:
+        return None
+
+    return {
+        "name": name[:1].upper() + name[1:],
+        "notes": "",
+        "effort": effort,
+        "recurrence": recurrence,
+        "custom_count": custom_count,
+        "custom_unit": custom_unit,
+        "reminder_time": reminder_time,
+    }
+
+
+def _parse_swap_target(text, household):
+    lower = text.lower()
+    match = (
+        re.search(r"\bswap\b.*?\bwith\s+([a-z\-]+)\b", lower)
+        or re.search(r"\bswap\b.*?\bto\s+([a-z\-]+)\b", lower)
+    )
+    if not match:
+        return None, 'Try "swap my chore with <roommate name>".'
+    target_name = match.group(1).capitalize()
+    for candidate in household.roommates.all():
+        if candidate.display_name.lower() == target_name.lower():
+            return candidate, None
+    available = ", ".join(
+        roommate.display_name for roommate in household.roommates.all()
+    )
+    return None, (
+        f'I couldn\'t find a roommate named "{target_name}". '
+        f"Household members: {available}."
+    )
+
+
+def _fallback_result(text, household):
+    lower = text.lower()
+
+    if "swap" in lower:
+        target, error = _parse_swap_target(text, household)
+        if target is None:
+            return {"ok": False, "action": None, "message": error}
         return {
-            "ok": False,
-            "action": None,
-            "message": "Drafting chores and swaps needs an AI API key. "
-            "Configure LLM_GATEWAY_API_KEY to use this feature.",
+            "ok": True,
+            "action": "create_swap",
+            "message": "",
+            "draft": {"target_id": target.id, "target_name": target.display_name},
         }
 
-    if "why" in lower or "explain" in lower:
-        action = "explain"
-        message = (
-            "Assignments are fair because the chore always goes to the roommate "
-            "with the fewest completed effort points. Currently: "
-            + "; ".join(_fairness_lines(totals)[:-1])
-            + ". "
-            + _fairness_lines(totals)[-1]
-        )
-    else:
-        action = "suggest"
-        message = "Next fair assignee: " + _fairness_lines(totals)[-1]
+    if DRAFT_INTENT.search(lower):
+        draft = _parse_chore_draft(text)
+        if draft is None:
+            return {
+                "ok": False,
+                "action": None,
+                "message": 'I couldn\'t draft a chore from that. '
+                'Try "add <chore name> every <N> days/weeks".',
+            }
+        return {"ok": True, "action": "create_chore", "message": "", "draft": draft}
 
-    return {"ok": True, "action": action, "message": message, "totals": totals}
+    if "why" in lower or "explain" in lower:
+        totals = _effort_totals(household)
+        return {
+            "ok": True,
+            "action": "explain",
+            "message": (
+                "Assignments are fair because the chore always goes to the roommate "
+                "with the fewest completed effort points. Currently: "
+                + "; ".join(_fairness_lines(totals)[:-1])
+                + ". "
+                + _fairness_lines(totals)[-1]
+            ),
+            "totals": totals,
+        }
+
+    totals = _effort_totals(household)
+    return {
+        "ok": True,
+        "action": "suggest",
+        "message": "Next fair assignee: " + _fairness_lines(totals)[-1],
+        "totals": totals,
+    }
 
 
 def _strip_fences(content):
