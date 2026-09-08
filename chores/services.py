@@ -1,6 +1,42 @@
+from datetime import timedelta
+
+from dateutil.relativedelta import relativedelta
 from django.db.models import Sum
 
-from .models import Household, Roommate
+from .models import Chore, Household, Roommate
+
+
+def next_due(chore: Chore):
+    due_at = chore.due_at
+    kind = chore.recurrence_kind
+
+    if kind == Chore.RecurrenceKind.DAILY:
+        return due_at + timedelta(days=1)
+    if kind == Chore.RecurrenceKind.WEEKLY:
+        return due_at + timedelta(weeks=1)
+    if kind == Chore.RecurrenceKind.MONTHLY:
+        return due_at + relativedelta(months=1)
+    if kind == Chore.RecurrenceKind.CUSTOM:
+        if not chore.custom_count or not chore.custom_unit:
+            raise ValueError("custom recurrence needs custom_count and custom_unit")
+        count = chore.custom_count
+        if chore.custom_unit == Chore.CustomUnit.HOURS:
+            return due_at + timedelta(hours=count)
+        if chore.custom_unit == Chore.CustomUnit.DAYS:
+            return due_at + timedelta(days=count)
+        if chore.custom_unit == Chore.CustomUnit.WEEKS:
+            return due_at + timedelta(weeks=count)
+        if chore.custom_unit == Chore.CustomUnit.MONTHS:
+            return due_at + relativedelta(months=count)
+    raise ValueError(f"unknown recurrence kind: {kind}")
+
+
+def schedule_next(chore: Chore) -> Chore:
+    chore.due_at = next_due(chore)
+    chore.assignee = pick_assignee(chore.household)
+    chore.status = Chore.Status.ASSIGNED
+    chore.save()
+    return chore
 
 
 def pick_assignee(household: Household) -> Roommate | None:
