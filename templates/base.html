@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}FairShare Chores{% endblock %}</title>
+    <meta name="theme-color" content="#2563eb">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
 </head>
@@ -11,5 +14,12 @@
 <main class="container">
     {% block content %}{% endblock %}
 </main>
+<script>
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+        navigator.serviceWorker.register("/service-worker.js");
+    });
+}
+</script>
 </body>
 </html>

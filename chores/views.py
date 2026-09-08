@@ -3,9 +3,10 @@ from datetime import timedelta
 import secrets
 import string
 
+from django.contrib.staticfiles import finders
 from django.core.paginator import Paginator
+from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
-from django.http import HttpResponseForbidden
 from django.utils import timezone
 
 from .forms import (
@@ -256,6 +257,31 @@ def history_list(request):
         "history.html",
         {"roommate": roommate, "page_obj": page_obj},
     )
+
+
+def service_worker(request):
+    return render(request, "service_worker.js", content_type="application/javascript")
+
+
+def manifest(request):
+    return render(
+        request,
+        "manifest.webmanifest",
+        content_type="application/manifest+json",
+    )
+
+
+def app_icon(request, size):
+    if size not in (192, 512):
+        raise Http404("unsupported icon size")
+    path = finders.find(f"icons/icon-{size}.png")
+    if path is None:
+        raise Http404("icon not found")
+    return FileResponse(open(path, "rb"), content_type="image/png")
+
+
+def offline(request):
+    return render(request, "offline.html")
 
 
 def settings_view(request):
