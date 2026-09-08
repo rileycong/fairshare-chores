@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Chores</h1>
+<p>Welcome, {{ roommate.display_name }}.</p>
+{% if chores %}
+<ul>
+    {% for chore in chores %}
+    <li>{{ chore.name }}</li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No chores yet.</p>
+{% endif %}
+{% endblock %}
