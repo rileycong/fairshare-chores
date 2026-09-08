@@ -1,9 +1,15 @@
 from datetime import timedelta
 
 from dateutil.relativedelta import relativedelta
+from django.db import transaction
 from django.db.models import Sum
+from django.utils import timezone
 
-from .models import Chore, Household, Roommate
+from .models import Chore, HistoryRecord, Household, Roommate
+
+
+class CompletionError(Exception):
+    pass
 
 
 def next_due(chore: Chore):
@@ -36,6 +42,25 @@ def schedule_next(chore: Chore) -> Chore:
     chore.assignee = pick_assignee(chore.household)
     chore.status = Chore.Status.ASSIGNED
     chore.save()
+    return chore
+
+
+def complete_chore(chore: Chore, roommate: Roommate) -> Chore:
+    if chore.assignee_id is None or roommate.id != chore.assignee_id:
+        raise CompletionError("only the current assignee can complete a chore")
+
+    with transaction.atomic():
+        HistoryRecord.objects.create(
+            chore=chore,
+            assignee=roommate,
+            effort_points=chore.effort_points,
+            due_at=chore.due_at,
+            completed_at=timezone.now(),
+        )
+        if chore.supply_id and not chore.supply.restocked:
+            chore.supply.restocked = True
+            chore.supply.save(update_fields=["restocked"])
+        schedule_next(chore)
     return chore
 
 
