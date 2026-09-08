@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>History</h1>
+<p><a href="{% url 'chore_list' %}">Back to chores</a></p>
+
+{% if page_obj.object_list %}
+<section>
+    {% for record in page_obj %}
+    <div class="history-record">
+        <strong>{{ record.chore.name }}</strong>
+        completed by {{ record.assignee.display_name }}
+        &middot; {{ record.effort_points }} pt{{ record.effort_points|pluralize }}
+        &middot; due {{ record.due_at|date:"M j, H:i" }}
+        &middot; done {{ record.completed_at|date:"M j, H:i" }}
+        {% if record.swapped %}<span class="badge">swapped</span>{% endif %}
+    </div>
+    {% endfor %}
+</section>
+
+<div class="pagination">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}">Previous</a>
+    {% endif %}
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}">Next</a>
+    {% endif %}
+</div>
+{% else %}
+<p>No completed chores yet.</p>
+{% endif %}
+{% endblock %}

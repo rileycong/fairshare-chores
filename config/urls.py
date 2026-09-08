@@ -11,6 +11,7 @@ urlpatterns = [
     path('household/code/', views.household_code, name='household_code'),
     path('chores/', views.chore_list, name='chore_list'),
     path('supplies/', views.supplies_list, name='supplies_list'),
+    path('history/', views.history_list, name='history_list'),
     path('supplies/<int:supply_id>/toggle/', views.toggle_supply, name='toggle_supply'),
     path('chores/new/', views.chore_create, name='chore_create'),
     path('chores/<int:chore_id>/edit/', views.chore_edit, name='chore_edit'),

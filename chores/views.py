@@ -3,12 +3,13 @@ from datetime import timedelta
 import secrets
 import string
 
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.http import HttpResponseForbidden
 from django.utils import timezone
 
 from .forms import ChoreForm, CreateHouseholdForm, JoinHouseholdForm
-from .models import Chore, Household, Roommate, Supply, SwapRequest
+from .models import Chore, HistoryRecord, Household, Roommate, Supply, SwapRequest
 from .services import (
     CompletionError,
     SwapError,
@@ -232,6 +233,24 @@ def toggle_supply(request, supply_id):
     supply.restocked = not supply.restocked
     supply.save(update_fields=["restocked"])
     return redirect("supplies_list")
+
+
+def history_list(request):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return redirect("home")
+    records = (
+        HistoryRecord.objects.filter(chore__household=roommate.household)
+        .select_related("chore", "assignee")
+        .order_by("-completed_at")
+    )
+    paginator = Paginator(records, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(
+        request,
+        "history.html",
+        {"roommate": roommate, "page_obj": page_obj},
+    )
 
 
 def _first_due(reminder_time):
