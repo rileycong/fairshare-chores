@@ -210,6 +210,30 @@ def respond_swap_view(request, swap_id, decision):
     return redirect("chore_list")
 
 
+def supplies_list(request):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return redirect("home")
+    supplies = roommate.household.supplies.order_by("name")
+    return render(
+        request, "supplies.html", {"roommate": roommate, "supplies": supplies}
+    )
+
+
+def toggle_supply(request, supply_id):
+    roommate = get_roommate(request)
+    if roommate is None:
+        return redirect("home")
+    supply = get_object_or_404(
+        Supply, id=supply_id, household=roommate.household
+    )
+    if request.method != "POST":
+        return redirect("supplies_list")
+    supply.restocked = not supply.restocked
+    supply.save(update_fields=["restocked"])
+    return redirect("supplies_list")
+
+
 def _first_due(reminder_time):
     now_local = timezone.localtime(timezone.now())
     candidate = now_local.replace(

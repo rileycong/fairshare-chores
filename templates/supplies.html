@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Supplies</h1>
+<p><a href="{% url 'chore_list' %}">Back to chores</a></p>
+
+{% if supplies %}
+<section>
+    {% for supply in supplies %}
+    <div class="supply-card {% if supply.restocked %}restocked{% endif %}">
+        <strong>{{ supply.name }}</strong>
+        <span class="badge">{{ supply.restocked|yesno:"Restocked,Not restocked" }}</span>
+        <form method="post" action="{% url 'toggle_supply' supply.id %}">
+            {% csrf_token %}
+            <button type="submit">
+                {% if supply.restocked %}Mark as not restocked{% else %}Mark as restocked{% endif %}
+            </button>
+        </form>
+    </div>
+    {% endfor %}
+</section>
+{% else %}
+<p>No supplies yet. Add one from the chore editor.</p>
+{% endif %}
+{% endblock %}
